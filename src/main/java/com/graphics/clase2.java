@@ -17,6 +17,15 @@ public class clase2 extends clase1 {
     protected boolean camaraAerea = false; // false: seguir el auto; true: observar toda la ciudad.
     protected static final float RADIO_AUTO = 1.65f; // Radio que contiene al vehículo para las colisiones.
 
+    // ==================== 1b. VARIABLES DE LA CHATA DEL AUTO ====================
+    protected static final float ENGANCHE = 1.55f; // Distancia del centro del auto a la bola de enganche, hacia atrás (+Z local).
+    protected static final float LANZA = 3.2f; // Distancia de la bola de enganche al eje de las ruedas de la chata.
+    protected static final float RADIO_CHATA = 1.5f; // Radio que contiene a la plataforma para las colisiones.
+    protected static final float GIRO_MAXIMO_CHATA = 1.4f; // Ángulo máximo entre auto y chata (unos 80°) para que no se crucen.
+    protected float chataX = -30; // Posición X del eje de la chata; empieza alineada detrás del auto.
+    protected float chataZ = 30 + ENGANCHE + LANZA; // Posición Z del eje: detrás del auto, a la distancia del enganche más la lanza.
+    protected float chataAngulo = 0; // Orientación de la chata; puede diferir del auto al girar.
+
     // ==================== 2. TECLADO Y REINICIO ====================
 
     /** Atiende acciones que deben ocurrir una sola vez por pulsación. */
@@ -39,6 +48,9 @@ public class clase2 extends clase1 {
         autoZ = 30; // Recupera la coordenada Z de inicio.
         angulo = 0; // Orienta el frente hacia -Z.
         velocidad = 0; // Detiene cualquier movimiento previo.
+        chataX = autoX; // Alinea la chata con el auto en X.
+        chataZ = autoZ + ENGANCHE + LANZA; // Coloca la chata justo detrás del auto.
+        chataAngulo = angulo; // Orienta la chata igual que el auto.
     }
 
     // ==================== 3. MOVIMIENTO POR CUADRO ====================
@@ -76,20 +88,47 @@ public class clase2 extends clase1 {
             direccion -= 1; // Selecciona el sentido negativo de rotación.
         }
 
-        angulo += direccion * velocidad * 0.11f * deltaTime; // Gira según la velocidad; en reversa invierte el giro.
-        float frenteX = -(float) Math.sin(angulo); // Obtiene la componente X del frente del vehículo.
-        float frenteZ = -(float) Math.cos(angulo); // Obtiene la componente Z; con ángulo cero vale -1.
+        float siguienteAngulo = angulo + direccion * velocidad * 0.11f * deltaTime; // Gira según la velocidad; en reversa invierte el giro.
+        float frenteX = -(float) Math.sin(siguienteAngulo); // Obtiene la componente X del frente del vehículo.
+        float frenteZ = -(float) Math.cos(siguienteAngulo); // Obtiene la componente Z; con ángulo cero vale -1.
         float siguienteX = autoX + frenteX * velocidad * deltaTime; // Propone la nueva posición X.
         float siguienteZ = autoZ + frenteZ * velocidad * deltaTime; // Propone la nueva posición Z.
+        float[] siguienteChata = arrastrarChata(siguienteX, siguienteZ, siguienteAngulo); // Calcula dónde quedaría la chata.
+        boolean autoLibre = puedeCircular(siguienteX, siguienteZ); // Comprueba la posición propuesta del auto.
+        boolean chataLibre = puedeCircular(siguienteChata[0], siguienteChata[1], RADIO_CHATA); // Comprueba la de la chata.
 
-        if (puedeCircular(siguienteX, siguienteZ)) { // Comprueba la posición antes de mover el auto.
+        if (autoLibre && chataLibre) { // Solo mueve el conjunto si ni el auto ni la chata chocan.
+            angulo = siguienteAngulo; // Acepta el giro del auto.
             autoX = siguienteX; // Acepta el desplazamiento horizontal.
             autoZ = siguienteZ; // Acepta el desplazamiento en profundidad.
+            chataX = siguienteChata[0]; // Acepta la nueva posición X de la chata.
+            chataZ = siguienteChata[1]; // Acepta la nueva posición Z de la chata.
+            chataAngulo = siguienteChata[2]; // Acepta la nueva orientación de la chata.
         } else { // La posición propuesta invadiría una manzana o saldría del mapa.
-            velocidad = 0; // Detiene el auto conservando su última posición válida.
+            velocidad = 0; // Detiene el conjunto conservando su última posición válida.
         }
 
         actualizarTitulo(); // Muestra los controles y la velocidad actual.
+    }
+
+    /**
+     * Calcula la chata arrastrada por el auto en la pose indicada; devuelve {x, z, angulo}.
+     * La chata gira sobre la bola de enganche: su eje se acerca al enganche manteniendo
+     * siempre la distancia LANZA, igual que un remolque real tirado por una barra rígida.
+     */
+    protected float[] arrastrarChata(float x, float z, float giro) {
+        float engancheX = x + (float) Math.sin(giro) * ENGANCHE; // Ubica la bola de enganche detrás del auto en X.
+        float engancheZ = z + (float) Math.cos(giro) * ENGANCHE; // Ubica la bola de enganche detrás del auto en Z.
+        float haciaChataX = chataX - engancheX; // Vector desde el enganche hasta el eje actual de la chata, en X.
+        float haciaChataZ = chataZ - engancheZ; // Vector desde el enganche hasta el eje actual de la chata, en Z.
+        float nuevoAngulo = (float) Math.atan2(haciaChataX, haciaChataZ); // La chata apunta su lanza hacia el enganche.
+        float diferencia = nuevoAngulo - giro; // Mide cuánto se dobla la chata respecto al auto.
+        diferencia = (float) Math.atan2(Math.sin(diferencia), Math.cos(diferencia)); // Normaliza la diferencia entre -π y π.
+        diferencia = Math.max(-GIRO_MAXIMO_CHATA, Math.min(GIRO_MAXIMO_CHATA, diferencia)); // Evita que la chata choque con el auto.
+        nuevoAngulo = giro + diferencia; // Recalcula la orientación ya limitada.
+        float nuevoX = engancheX + (float) Math.sin(nuevoAngulo) * LANZA; // Coloca el eje a la distancia de la lanza en X.
+        float nuevoZ = engancheZ + (float) Math.cos(nuevoAngulo) * LANZA; // Coloca el eje a la distancia de la lanza en Z.
+        return new float[] {nuevoX, nuevoZ, nuevoAngulo}; // Entrega la pose propuesta sin modificar el estado.
     }
 
     /** Compone el texto de la ventana sin mezclarlo con las fórmulas de conducción. */
@@ -112,7 +151,12 @@ public class clase2 extends clase1 {
 
     /** Comprueba si el círculo del auto cabe en una posición sin tocar manzanas ni bordes. */
     protected boolean puedeCircular(float x, float z) {
-        float limitePermitido = LIMITE - RADIO_AUTO; // Reserva espacio para que el auto completo quede dentro.
+        return puedeCircular(x, z, RADIO_AUTO); // Usa el radio del auto.
+    }
+
+    /** Comprueba si un círculo de cualquier radio cabe en una posición; lo usan el auto y la chata. */
+    protected boolean puedeCircular(float x, float z, float radio) {
+        float limitePermitido = LIMITE - radio; // Reserva espacio para que el objeto completo quede dentro.
 
         if (Math.abs(x) > limitePermitido || Math.abs(z) > limitePermitido) { // Detecta salida por cualquier borde.
             return false; // Rechaza la posición exterior.
@@ -132,7 +176,7 @@ public class clase2 extends clase1 {
                 float distanciaZ = z - cercaZ; // Calcula la separación en profundidad al rectángulo.
                 float distanciaCuadrada = distanciaX * distanciaX + distanciaZ * distanciaZ; // Aplica Pitágoras sin raíz.
 
-                if (distanciaCuadrada < RADIO_AUTO * RADIO_AUTO) { // Comprueba si el círculo invade la manzana.
+                if (distanciaCuadrada < radio * radio) { // Comprueba si el círculo invade la manzana.
                     return false; // Rechaza el movimiento que produciría una colisión.
                 }
             }
@@ -151,9 +195,9 @@ public class clase2 extends clase1 {
             return; // Evita reemplazarla con la cámara de seguimiento.
         }
 
-        float camaraX = autoX + (float) Math.sin(angulo) * 12; // Coloca la cámara 12 unidades detrás en X.
-        float camaraZ = autoZ + (float) Math.cos(angulo) * 12; // Coloca la cámara 12 unidades detrás en Z.
-        vector("uOjo", camaraX, 9, camaraZ); // Envía la posición de la cámara, a 9 unidades de altura.
+        float camaraX = autoX + (float) Math.sin(angulo) * 14; // Coloca la cámara 14 unidades detrás en X para ver también la chata.
+        float camaraZ = autoZ + (float) Math.cos(angulo) * 14; // Coloca la cámara 14 unidades detrás en Z.
+        vector("uOjo", camaraX, 10, camaraZ); // Envía la posición de la cámara, a 10 unidades de altura.
         vector("uObjetivo", autoX, 0.8f, autoZ); // Orienta la cámara hacia la carrocería.
         decimal("uAspecto", (float) ancho / alto); // Mantiene las proporciones al redimensionar la ventana.
     }
@@ -165,6 +209,7 @@ public class clase2 extends clase1 {
     protected void escena() {
         super.escena(); // Dibuja asfalto, calles, edificios y parques.
         dibujarAuto(); // Añade el modelo del vehículo sobre la ciudad.
+        dibujarChata(); // Añade el remolque enganchado detrás del auto.
     }
 
     /** Construye el auto con cajas; argumentos: posición XYZ, tamaño XYZ y color RGB. */
@@ -185,15 +230,46 @@ public class clase2 extends clase1 {
             pieza(x, 0.68f, -1.32f, 0.38f, 0.2f, 0.07f, 1, 0.95f, 0.65f); // Dibuja un faro delantero claro.
             pieza(x, 0.68f, 1.32f, 0.35f, 0.17f, 0.07f, 0.85f, 0.05f, 0.05f); // Dibuja una luz trasera roja.
         }
+
+        pieza(0, 0.5f, 1.42f, 0.18f, 0.12f, 0.3f, 0.2f, 0.2f, 0.22f); // Dibuja el soporte del enganche bajo el parachoques.
+        pieza(0, 0.6f, ENGANCHE, 0.2f, 0.2f, 0.2f, 0.7f, 0.7f, 0.72f); // Dibuja la bola de enganche metálica.
+    }
+
+    /** Construye la chata con cajas; su origen local es el eje de las ruedas y su frente (-Z) mira al enganche. */
+    protected void dibujarChata() {
+        piezaChata(0, 0.75f, 0.2f, 1.8f, 0.2f, 2.6f, 0.55f, 0.36f, 0.18f); // Dibuja la plataforma plana de madera.
+        piezaChata(0, 0.6f, 0.2f, 0.3f, 0.12f, 2.4f, 0.2f, 0.2f, 0.22f); // Dibuja el chasis central bajo la plataforma.
+        piezaChata(0, 0.6f, -2.1f, 0.15f, 0.12f, 2.2f, 0.2f, 0.2f, 0.22f); // Dibuja la lanza que llega hasta la bola de enganche.
+        float[] lados = {-0.88f, 0.88f}; // Ubica las barandas a izquierda y derecha.
+
+        for (float x : lados) { // Repite la baranda y la rueda en ambos lados.
+            piezaChata(x, 0.97f, 0.2f, 0.08f, 0.25f, 2.6f, 0.4f, 0.26f, 0.13f); // Dibuja la baranda lateral baja.
+            piezaChata(x * 1.12f, 0.36f, 0, 0.22f, 0.56f, 0.56f, 0.055f, 0.065f, 0.08f); // Dibuja la rueda fuera de la plataforma.
+            piezaChata(x * 1.12f, 0.7f, 0, 0.26f, 0.06f, 0.75f, 0.2f, 0.2f, 0.22f); // Dibuja el guardabarros sobre la rueda.
+            piezaChata(x * 0.7f, 0.75f, 1.52f, 0.3f, 0.14f, 0.05f, 0.85f, 0.05f, 0.05f); // Dibuja una luz trasera roja.
+        }
+
+        piezaChata(0, 0.97f, -1.06f, 1.8f, 0.25f, 0.08f, 0.4f, 0.26f, 0.13f); // Dibuja la baranda delantera.
+        piezaChata(0, 0.97f, 1.46f, 1.8f, 0.25f, 0.08f, 0.4f, 0.26f, 0.13f); // Dibuja la baranda trasera.
     }
 
     /** Transforma una pieza del espacio local del auto al espacio de la ciudad. */
     protected void pieza(float x, float y, float z, float sx, float sy, float sz, float r, float g, float b) {
-        float coseno = (float) Math.cos(angulo); // Calcula el coseno de la orientación del auto.
-        float seno = (float) Math.sin(angulo); // Calcula el seno de la misma orientación.
-        float mundoX = autoX + coseno * x + seno * z; // Gira la posición local y suma la posición X del auto.
-        float mundoZ = autoZ - seno * x + coseno * z; // Gira la posición local y suma la posición Z del auto.
-        cajaGirada(mundoX, y, mundoZ, sx, sy, sz, r, g, b, angulo); // Dibuja la pieza con la orientación del vehículo.
+        piezaEn(autoX, autoZ, angulo, x, y, z, sx, sy, sz, r, g, b); // Usa la posición y el giro del auto.
+    }
+
+    /** Transforma una pieza del espacio local de la chata al espacio de la ciudad. */
+    protected void piezaChata(float x, float y, float z, float sx, float sy, float sz, float r, float g, float b) {
+        piezaEn(chataX, chataZ, chataAngulo, x, y, z, sx, sy, sz, r, g, b); // Usa la posición y el giro de la chata.
+    }
+
+    /** Gira una pieza local según "giro" y la traslada al origen (origenX, origenZ) del objeto. */
+    protected void piezaEn(float origenX, float origenZ, float giro, float x, float y, float z, float sx, float sy, float sz, float r, float g, float b) {
+        float coseno = (float) Math.cos(giro); // Calcula el coseno de la orientación del objeto.
+        float seno = (float) Math.sin(giro); // Calcula el seno de la misma orientación.
+        float mundoX = origenX + coseno * x + seno * z; // Gira la posición local y suma la posición X del objeto.
+        float mundoZ = origenZ - seno * x + coseno * z; // Gira la posición local y suma la posición Z del objeto.
+        cajaGirada(mundoX, y, mundoZ, sx, sy, sz, r, g, b, giro); // Dibuja la pieza con la orientación del objeto.
     }
 
     /** Punto de entrada para ejecutar únicamente la segunda etapa. */

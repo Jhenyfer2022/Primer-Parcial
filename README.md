@@ -64,6 +64,7 @@ Se usa una instrucción por línea, condiciones con llaves y cálculos intermedi
 4. Explicar el giro proporcional a la velocidad y el cambio de dirección al retroceder.
 5. Revisar `puedeCircular()`: círculo contra rectángulo, punto más cercano y distancia al cuadrado.
 6. Alternar cámaras con C para observar la conducción en el mapa.
+7. Leer `arrastrarChata()` y `dibujarChata()`: la chata (remolque) gira sobre la bola de enganche. En cada cuadro su eje se orienta hacia el enganche con `atan2` y se recoloca a la distancia fija `LANZA`. El ángulo con el auto se limita a `GIRO_MAXIMO_CHATA`. El conjunto solo avanza si el auto y la chata caben en la calle. `piezaEn()` reutiliza la misma transformación local→mundo para ambos objetos.
 
 **Ejercicio:** modificar aceleración y resistencia y comparar el manejo. El círculo de colisión es conservador para contener todas las piezas. El choque detiene al auto; no hay rebotes. El paso temporal se limita para evitar atravesar una manzana tras una pausa larga.
 

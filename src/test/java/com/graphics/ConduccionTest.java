@@ -58,6 +58,27 @@ public class ConduccionTest extends TestCase {
         assertTrue(juego.puedeCircular(-27, -20)); // Acepta una posición con separación suficiente de la acera.
     }
 
+    /** Comprueba que la chata sigue al auto manteniendo la longitud de la lanza y se dobla al girar. */
+    public void testChataSigueAlAuto() {
+        clase2 juego = new clase2(); // Crea el auto con la chata alineada detrás.
+        assertTrue(juego.puedeCircular(juego.chataX, juego.chataZ, clase2.RADIO_CHATA)); // La chata empieza sobre la calle.
+        float[] chata = null; // Guardará la última pose calculada de la chata.
+        for (int paso = 0; paso < 50; paso++) { // Simula una curva hacia la izquierda en pasos pequeños.
+            juego.angulo += 0.01f; // Gira un poco el auto en cada paso.
+            juego.autoX -= (float) Math.sin(juego.angulo) * 0.2f; // Avanza hacia su frente en X.
+            juego.autoZ -= (float) Math.cos(juego.angulo) * 0.2f; // Avanza hacia su frente en Z.
+            chata = juego.arrastrarChata(juego.autoX, juego.autoZ, juego.angulo); // Calcula el arrastre.
+            juego.chataX = chata[0]; // Acepta la posición X de la chata.
+            juego.chataZ = chata[1]; // Acepta la posición Z de la chata.
+            juego.chataAngulo = chata[2]; // Acepta la orientación de la chata.
+        }
+        float engancheX = juego.autoX + (float) Math.sin(juego.angulo) * clase2.ENGANCHE; // Ubica la bola de enganche en X.
+        float engancheZ = juego.autoZ + (float) Math.cos(juego.angulo) * clase2.ENGANCHE; // Ubica la bola de enganche en Z.
+        float largo = (float) Math.hypot(chata[0] - engancheX, chata[1] - engancheZ); // Mide la lanza resultante.
+        assertEquals(clase2.LANZA, largo, 0.001f); // Exige que la lanza no se estire ni se encoja.
+        assertTrue(chata[2] > 0 && chata[2] < juego.angulo); // La chata gira en el mismo sentido, pero menos que el auto.
+    }
+
     /** Comprueba que el reinicio restaura la posición y detiene el vehículo. */
     public void testReinicio() {
         clase4 juego = new clase4(); // Crea la versión final sin inicializar OpenGL.
@@ -70,5 +91,7 @@ public class ConduccionTest extends TestCase {
         assertEquals(30f, juego.autoZ, 0f); // Exige recuperar la coordenada Z inicial.
         assertEquals(0f, juego.velocidad, 0f); // Exige que el vehículo quede detenido.
         assertEquals(0f, juego.angulo, 0f); // Exige recuperar la dirección frontal inicial.
+        assertEquals(0f, juego.chataAngulo, 0f); // Exige que la chata vuelva a quedar alineada.
+        assertEquals(30f + clase2.ENGANCHE + clase2.LANZA, juego.chataZ, 0.001f); // Exige la chata justo detrás del auto.
     }
 }
